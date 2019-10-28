@@ -7373,6 +7373,7 @@ void lcd_belttest()
     lcd_belttest_print(_i("Done"), X, Y);
 
  error:
+    enquecommand_P(PSTR("M84"));
     FORCE_HIGH_POWER_END;
     KEEPALIVE_STATE(NOT_BUSY);
     _delay(3000);
