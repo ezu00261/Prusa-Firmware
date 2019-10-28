@@ -74,9 +74,6 @@ extern int current_voltage_raw_pwr;
 extern int current_voltage_raw_bed;
 #endif
 
-#ifdef TEMP_SENSOR_1_AS_REDUNDANT
-  extern float redundant_temperature;
-#endif
 
 #if defined(CONTROLLERFAN_PIN) && CONTROLLERFAN_PIN > -1
   extern unsigned char soft_pwm_bed;
@@ -122,6 +119,7 @@ inline void babystepsTodoZsubtract(int n)
 //inline so that there is no performance decrease.
 //deg=degreeCelsius
 
+// Doesn't save FLASH when FORCE_INLINE removed.
 FORCE_INLINE float degHotend(uint8_t extruder) {  
   return current_temperature[extruder];
 };
@@ -140,6 +138,7 @@ FORCE_INLINE float degBed() {
   return current_temperature_bed;
 };
 
+// Doesn't save FLASH when FORCE_INLINE removed.
 FORCE_INLINE float degTargetHotend(uint8_t extruder) {  
   return target_temperature[extruder];
 };
@@ -148,11 +147,13 @@ FORCE_INLINE float degTargetBed() {
   return target_temperature_bed;
 };
 
+// Doesn't save FLASH when FORCE_INLINE removed.
 FORCE_INLINE void setTargetHotend(const float &celsius, uint8_t extruder) {  
   target_temperature[extruder] = celsius;
   resetPID(extruder);
 };
 
+// Doesn't save FLASH when not inlined.
 static inline void setTargetHotendSafe(const float &celsius, uint8_t extruder)
 {
     if (extruder<EXTRUDERS) {
@@ -161,6 +162,7 @@ static inline void setTargetHotendSafe(const float &celsius, uint8_t extruder)
     }
 }
 
+// Doesn't save FLASH when not inlined.
 static inline void setAllTargetHotends(const float &celsius)
 {
     for(int i=0;i<EXTRUDERS;i++) setTargetHotend(celsius,i);
@@ -215,7 +217,6 @@ FORCE_INLINE bool isCoolingBed() {
 
 int getHeaterPower(int heater);
 void disable_heater();
-void setWatch();
 void updatePID();
 
 
@@ -240,6 +241,7 @@ void checkExtruderAutoFans();
 
 enum { 
 	EFCE_OK = 0,   //!< normal operation, both fans are ok
+	EFCE_FIXED,    //!< previous fan error was fixed
 	EFCE_DETECTED, //!< fan error detected, but not reported yet
 	EFCE_REPORTED  //!< fan error detected and reported to LCD and serial
 };
