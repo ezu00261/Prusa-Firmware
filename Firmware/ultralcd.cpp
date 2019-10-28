@@ -7366,7 +7366,6 @@ void lcd_belttest()
 
     if (!_result){
         lcd_belttest_print(_i("Error"), X, Y);
-        lcd_clear();
         goto error;
     }
 
