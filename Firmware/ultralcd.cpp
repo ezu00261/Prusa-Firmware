@@ -7701,11 +7701,11 @@ static bool lcd_selfcheck_axis_sg(unsigned char axis) {
 
 //end of second measurement, now check for possible errors:
 
+	enable_endstops(false);
+
 	for(uint_least8_t i = 0; i < 2; i++){ //check if measured axis length corresponds to expected length
 		printf_P(_N("Measured axis length:%.3f\n"), measured_axis_length[i]);
 		if (abs(measured_axis_length[i] - axis_length) > max_error_mm) {
-			enable_endstops(false);
-
 			const char *_error_1;
 
 			if (axis == X_AXIS) _error_1 = "X";
