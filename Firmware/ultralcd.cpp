@@ -7368,6 +7368,7 @@ void lcd_belttest()
     uint16_t   Y = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_Y));
     lcd_belttest_print(_i("Checking X..."), X, Y);
 
+    FORCE_HIGH_POWER_START;
     _delay(2000);
     KEEPALIVE_STATE(IN_HANDLER);
 
@@ -7375,7 +7376,7 @@ void lcd_belttest()
     X = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_X));
     if (!_result){
         lcd_belttest_print(_i("Error"), X, Y);
-        return;
+        goto error;
     }
 
     lcd_belttest_print(_i("Checking Y..."), X, Y);
@@ -7385,12 +7386,14 @@ void lcd_belttest()
     if (!_result){
         lcd_belttest_print(_i("Error"), X, Y);
         lcd_clear();
-        return;
+        goto error;
     }
 
 
     lcd_belttest_print(_i("Done"), X, Y);
 
+ error:
+    FORCE_HIGH_POWER_END;
     KEEPALIVE_STATE(NOT_BUSY);
     _delay(3000);
 }
