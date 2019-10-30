@@ -7343,7 +7343,15 @@ void lcd_sdcard_menu()
 static void lcd_belttest_v()
 {
     lcd_belttest();
-    menu_back_if_clicked();
+
+    KEEPALIVE_STATE(PAUSED_FOR_USER);
+    while (!lcd_clicked()){
+        manage_heater();
+	manage_inactivity(true);
+	_delay(100);
+    }
+    KEEPALIVE_STATE(NOT_BUSY);
+    menu_back();
 }
 void lcd_belttest_print(const char* msg, uint16_t X, uint16_t Y)
 {
@@ -7395,7 +7403,6 @@ void lcd_belttest()
     enquecommand_P(PSTR("M84"));
     FORCE_HIGH_POWER_END;
     KEEPALIVE_STATE(NOT_BUSY);
-    _delay(3000);
 }
 #endif //TMC2130
 
