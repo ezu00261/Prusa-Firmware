@@ -3351,6 +3351,33 @@ extern uint8_t st_backlash_x;
 extern uint8_t st_backlash_y;
 #endif //BACKLASH_Y
 
+#ifdef TMC2130_SERVICE_CODES_M910_M918
+static void wait_tmc2130_sg_measure(uint8_t axis, float feedrate, float pos)
+{
+	current_position[axis] = pos;
+	plan_buffer_line_curposXYZE(feedrate, active_extruder);
+
+	uint32_t checktime = _millis();
+	while (blocks_queued())
+	{
+		manage_heater();
+		tmc2130_update_sg();
+		if (_millis() - checktime > 100)
+		{
+			uint16_t sg1 = tmc2130_sg_meassure_now(axis);
+			uint8_t diag = tmc2130_sample_diag() & (1 << axis);
+			printf_P(PSTR("SG: %c-AXIS: diag=%d, THR=%d, SG1=%d\n"), 'X' + axis, diag ? 1 : 0, (int8_t)tmc2130_sg_thr[axis], sg1);
+			checktime = _millis();
+			char msg[24];
+			sprintf_P(msg, PSTR("%c D=%d TH=%d SG=%d"), 'X' + axis, diag ? 1 : 0, (int8_t)tmc2130_sg_thr[axis], sg1);
+			lcd_setstatus(msg);
+			lcd_draw_update = 1;
+			lcd_update(0);
+		}
+	}
+}
+#endif
+
 //! \ingroup marlin_main
 
 //! @brief Parse and process commands
@@ -7650,6 +7677,83 @@ Sigma_Exit:
         if (code_seen('E')) tmc2130_set_pwm_grad(3, code_value());
     }
     break;
+
+  //! ### M919
+  // --------------------------------------------------------------
+	case 919:
+	{
+		if (code_seen('X')) tmc2130_sg_cnt_thr[X_AXIS] = code_value();
+		if (code_seen('Y')) tmc2130_sg_cnt_thr[Y_AXIS] = code_value();
+		if (code_seen('Z')) tmc2130_sg_cnt_thr[Z_AXIS] = code_value();
+		if (code_seen('E')) tmc2130_sg_cnt_thr[E_AXIS] = code_value();
+		for (uint8_t a = X_AXIS; a <= E_AXIS; a++)
+			printf_P(_N("tmc2130_sg_cnt_thr[%c]=%d\n"), "XYZE"[a], tmc2130_sg_cnt_thr[a]);
+	}
+	break;
+
+  //! ### M920
+  // -------------------------------------------------------------
+	case 920:
+	{
+		if (!(axis_known_position[X_AXIS] && axis_known_position[Y_AXIS] && axis_known_position[Z_AXIS]))
+		{
+			repeatcommand_front(); // repeat M920
+			enquecommand_front_P((PSTR("G28 W0")));
+			enquecommand_front_P((PSTR("G1 Z17")));
+			break;
+		}
+		if (code_seen('X') || code_seen('Y'))
+		{
+			int axis;
+			if (code_seen('X')) { axis = X_AXIS; tmc2130_sg_thr[axis] = code_value(); }
+			if (code_seen('Y')) { axis = Y_AXIS; tmc2130_sg_thr[axis] = code_value(); }
+
+			float axis_length = (axis == X_AXIS) ? X_MAX_POS : Y_MAX_POS;
+			float margin = 10;
+
+			// Enable sflt and update sg_thr
+			tmc2130_mode = TMC2130_MODE_NORMAL;
+			tmc2130_sg_filter_mask |= (1 << axis);
+			update_mode_profile();
+			tmc2130_init();
+
+			float feedrate = 2700 / 60;
+			if (code_seen('F'))
+				feedrate = code_value() / 60;
+
+			if (current_position[Z_AXIS] < 17)
+			{
+				current_position[Z_AXIS] += 17;
+				plan_buffer_line_curposXYZE(1000 / 60, active_extruder);
+				st_synchronize();
+			}
+
+			bool old = tmc2130_sg_stop_on_crash;
+			tmc2130_sg_stop_on_crash = false;
+
+			current_position[axis] = 0 + margin;
+			plan_buffer_line_curposXYZE(2700 / 60, active_extruder);
+			st_synchronize();
+
+			printf_P(PSTR("Measure %c AXIS\n"), 'X' + axis);
+			tmc2130_sg_meassure_start(axis);
+			wait_tmc2130_sg_measure(axis, feedrate, axis_length - margin);
+			wait_tmc2130_sg_measure(axis, feedrate, margin);
+
+			uint16_t sg1 = tmc2130_sg_meassure_stop();
+			printf_P(PSTR("%c AXIS SG1=%d\n"), 'X' + axis, sg1);
+
+			// Disable sflt
+			tmc2130_mode = eeprom_read_byte((uint8_t*)EEPROM_SILENT) ? TMC2130_MODE_SILENT : TMC2130_MODE_NORMAL;
+			tmc2130_sg_filter_mask = 0;
+			update_mode_profile();
+			tmc2130_init();
+
+			tmc2130_sg_crash = 0;
+			tmc2130_sg_stop_on_crash = old;
+		}
+	}
+	break;
 
 #endif //TMC2130_SERVICE_CODES_M910_M918
 
