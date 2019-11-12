@@ -147,6 +147,10 @@ static void mmu_cut_filament_menu();
 static void lcd_menu_fails_stats();
 #endif //TMC2130 or FILAMENT_SENSOR
 
+#ifdef TMC2130
+static void lcd_belttest_v();
+#endif //TMC2130
+
 static void lcd_selftest_v();
 
 #ifdef TMC2130
@@ -5827,6 +5831,9 @@ static void lcd_calibration_menu()
          MENU_ITEM_SUBMENU_P(_T(MSG_V2_CALIBRATION), lcd_first_layer_calibration_reset);
     }
 	MENU_ITEM_GCODE_P(_T(MSG_AUTO_HOME), PSTR("G28 W"));
+#ifdef TMC2130
+	MENU_ITEM_FUNCTION_P(_i("Belt test        "), lcd_belttest_v);////MSG_BELTTEST
+#endif //TMC2130
 	MENU_ITEM_FUNCTION_P(_i("Selftest         "), lcd_selftest_v);////MSG_SELFTEST
 #ifdef MK1BP
     // MK1
@@ -7341,6 +7348,72 @@ void lcd_sdcard_menu()
   }
   MENU_END();
 }
+#ifdef TMC2130
+static void lcd_belttest_v()
+{
+    lcd_belttest();
+
+    KEEPALIVE_STATE(PAUSED_FOR_USER);
+    while (!lcd_clicked()){
+        manage_heater();
+	manage_inactivity(true);
+	_delay(100);
+    }
+    KEEPALIVE_STATE(NOT_BUSY);
+    menu_back();
+}
+void lcd_belttest_print(const char* msg, uint16_t X, uint16_t Y)
+{
+    lcd_clear();
+    lcd_printf_P(
+              _N(
+                 "%S:\n"
+                 "%S\n"
+                 "X:%d\n"
+                 "Y:%d"
+                 ),
+              _i("Belt status"),
+              msg,
+              X,Y
+            );
+}
+void lcd_belttest()
+{
+    int _progress = 0;
+    bool _result = true;
+    uint16_t   X = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_X));
+    uint16_t   Y = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_Y));
+    lcd_belttest_print(_i("Checking X..."), X, Y);
+
+    FORCE_HIGH_POWER_START;
+    _delay(2000);
+    KEEPALIVE_STATE(IN_HANDLER);
+
+    _result = lcd_selfcheck_axis_sg(X_AXIS);
+    X = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_X));
+    if (!_result){
+        lcd_belttest_print(_i("Error"), X, Y);
+        goto error;
+    }
+
+    lcd_belttest_print(_i("Checking Y..."), X, Y);
+    _result = lcd_selfcheck_axis_sg(Y_AXIS);
+    Y = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_Y));
+
+    if (!_result){
+        lcd_belttest_print(_i("Error"), X, Y);
+        goto error;
+    }
+
+
+    lcd_belttest_print(_i("Done"), X, Y);
+
+ error:
+    enquecommand_P(PSTR("M84"));
+    FORCE_HIGH_POWER_END;
+    KEEPALIVE_STATE(NOT_BUSY);
+}
+#endif //TMC2130
 
 static void lcd_selftest_v()
 {
@@ -7663,11 +7736,11 @@ static bool lcd_selfcheck_axis_sg(unsigned char axis) {
 
 //end of second measurement, now check for possible errors:
 
+	enable_endstops(false);
+
 	for(uint_least8_t i = 0; i < 2; i++){ //check if measured axis length corresponds to expected length
 		printf_P(_N("Measured axis length:%.3f\n"), measured_axis_length[i]);
 		if (abs(measured_axis_length[i] - axis_length) > max_error_mm) {
-			enable_endstops(false);
-
 			const char *_error_1;
 
 			if (axis == X_AXIS) _error_1 = "X";
