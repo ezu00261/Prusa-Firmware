@@ -38,10 +38,11 @@ uint8_t tmc2130_pwm_freq[4] = {TMC2130_PWM_FREQ_X, TMC2130_PWM_FREQ_Y, TMC2130_P
 
 uint8_t tmc2130_mres[4] = {0, 0, 0, 0}; //will be filed at begin of init
 
+uint8_t tmc2130_chopper_rndtf_mask = 0;
 
 uint8_t tmc2130_sg_thr[4] = {TMC2130_SG_THRS_X, TMC2130_SG_THRS_Y, TMC2130_SG_THRS_Z, TMC2130_SG_THRS_E};
 uint8_t tmc2130_sg_thr_home[4] = {3, 3, TMC2130_SG_THRS_Z, TMC2130_SG_THRS_E};
-
+uint16_t tmc2130_sg_cnt_thr[4] = {64, 64, 64, 64};
 
 uint8_t tmc2130_sg_homing_axes_mask = 0x00;
 
@@ -65,6 +66,7 @@ tmc2130_chopper_config_t tmc2130_chopper_config[4] = {
 
 bool tmc2130_sg_stop_on_crash = true;
 uint8_t tmc2130_sg_diag_mask = 0x00;
+uint8_t tmc2130_sg_filter_mask = 0x00;
 uint8_t tmc2130_sg_crash = 0;
 uint16_t tmc2130_sg_err[4] = {0, 0, 0, 0};
 uint16_t tmc2130_sg_cnt[4] = {0, 0, 0, 0};
@@ -167,7 +169,7 @@ void tmc2130_init()
 	{
 		tmc2130_setup_chopper(axis, tmc2130_mres[axis], tmc2130_current_h[axis], tmc2130_current_r[axis]);
 		tmc2130_wr(axis, TMC2130_REG_TPOWERDOWN, 0x00000000);
-		tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr[axis]) << 16));
+		tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr[axis]) << 16) | (((tmc2130_sg_filter_mask & (1 << axis)) ? 1 : 0) << 24));
 		tmc2130_wr(axis, TMC2130_REG_TCOOLTHRS, (tmc2130_mode == TMC2130_MODE_SILENT)?0:__tcoolthrs(axis));
 		tmc2130_wr(axis, TMC2130_REG_GCONF, (tmc2130_mode == TMC2130_MODE_SILENT)?TMC2130_GCONF_SILENT:TMC2130_GCONF_SGSENS);
 		tmc2130_wr_PWMCONF(axis, tmc2130_pwm_ampl[axis], tmc2130_pwm_grad[axis], tmc2130_pwm_freq[axis], tmc2130_pwm_auto[axis], 0, 0);
@@ -256,7 +258,7 @@ void tmc2130_st_isr()
 		{
 			tmc2130_sg_cnt[axis] = tmc2130_sg_err[axis];
 			tmc2130_sg_change = true;
-			uint8_t sg_thr = 64;
+			uint8_t sg_thr = tmc2130_sg_cnt_thr[axis];
 //			if (axis == Y_AXIS) sg_thr = 64;
 			if (tmc2130_sg_err[axis] >= sg_thr)
 			{
@@ -304,7 +306,7 @@ void tmc2130_home_enter(uint8_t axes_mask)
 			tmc2130_sg_homing_axes_mask |= mask;
 			//Configuration to spreadCycle
 			tmc2130_wr(axis, TMC2130_REG_GCONF, TMC2130_GCONF_NORMAL);
-			tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr_home[axis]) << 16));
+			tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr_home[axis]) << 16) | (((tmc2130_sg_filter_mask & (1 << axis)) ? 1 : 0) << 24));
 //			tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr[axis]) << 16) | ((uint32_t)1 << 24));
 			tmc2130_wr(axis, TMC2130_REG_TCOOLTHRS, __tcoolthrs(axis));
 			tmc2130_setup_chopper(axis, tmc2130_mres[axis], tmc2130_current_h[axis], tmc2130_current_r_home[axis]);
@@ -343,7 +345,7 @@ void tmc2130_home_exit()
 //					tmc2130_wr(axis, TMC2130_REG_GCONF, TMC2130_GCONF_NORMAL);
 					tmc2130_setup_chopper(axis, tmc2130_mres[axis], tmc2130_current_h[axis], tmc2130_current_r[axis]);
 //					tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr[axis]) << 16) | ((uint32_t)1 << 24));
-					tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr[axis]) << 16));
+					tmc2130_wr(axis, TMC2130_REG_COOLCONF, (((uint32_t)tmc2130_sg_thr[axis]) << 16) | (((tmc2130_sg_filter_mask & (1 << axis)) ? 1 : 0) << 24));
 					tmc2130_wr(axis, TMC2130_REG_TCOOLTHRS, __tcoolthrs(axis));
 					tmc2130_wr(axis, TMC2130_REG_GCONF, TMC2130_GCONF_SGSENS);
 				}
@@ -368,6 +370,12 @@ uint16_t tmc2130_sg_meassure_stop()
 	return tmc2130_sg_meassure_val / tmc2130_sg_meassure_cnt;
 }
 
+uint16_t tmc2130_sg_meassure_now(uint8_t axis)
+{
+	uint32_t val32 = 0;
+	tmc2130_rd(axis, TMC2130_REG_DRV_STATUS, &val32);
+	return (val32 & 0x3ff);
+}
 
 bool tmc2130_wait_standstill_xy(int timeout)
 {
@@ -422,6 +430,32 @@ void tmc2130_check_overtemp()
 			lcd_print(' ');
 		}
 	}
+#else
+	if (tmc2130_sg_change)
+	{
+		char message[20];
+		char *cnt, *ptr = message;
+		*ptr++ = 'X';
+		*ptr++ = '=';
+		cnt = itostr3(tmc2130_sg_cnt[0]);
+		*ptr++ = cnt[0]; *ptr++ = cnt[1]; *ptr++ = cnt[2];
+		*ptr++ = '/';
+		cnt = itostr3(tmc2130_sg_err[0]);
+		*ptr++ = cnt[0]; *ptr++ = cnt[1]; *ptr++ = cnt[2];
+		*ptr++ = ' ';
+		*ptr++ = 'Y';
+		*ptr++ = '=';
+		cnt = itostr3(tmc2130_sg_cnt[1]);
+		*ptr++ = cnt[0]; *ptr++ = cnt[1]; *ptr++ = cnt[2];
+		*ptr++ = '/';
+		cnt = itostr3(tmc2130_sg_err[1]);
+		*ptr++ = cnt[0]; *ptr++ = cnt[1]; *ptr++ = cnt[2];
+		*ptr++ = 0;
+		lcd_setstatus(message);
+		// hack lcd_draw_update to 1, i.e. without clear
+		lcd_draw_update = 1;
+		tmc2130_sg_change = false;
+	}
 #endif //DEBUG_CRASHDET_COUNTERS
 }
 
@@ -446,6 +480,10 @@ void tmc2130_setup_chopper(uint8_t axis, uint8_t mres, uint8_t current_h, uint8_
 #endif //TMC2130_CNSTOFF_E
 //		toff = TMC2130_TOFF_E; // toff = 3-5
 //		rndtf = 1;
+	}
+	if (tmc2130_chopper_rndtf_mask & (1 << axis))
+	{
+		rndtf = 1;
 	}
 //	DBG(_n("tmc2130_setup_chopper(axis=%hhd, mres=%hhd, curh=%hhd, curr=%hhd\n"), axis, mres, current_h, current_r);
 //	DBG(_n(" toff=%hhd, hstr=%hhd, hend=%hhd, tbl=%hhd\n"), toff, hstrt, hend, tbl);

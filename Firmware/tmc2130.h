@@ -10,10 +10,14 @@ extern uint8_t tmc2130_current_r[4];
 //microstep resolution (0 means 256usteps, 8 means 1ustep
 extern uint8_t tmc2130_mres[4];
 
+extern uint8_t tmc2130_chopper_rndtf_mask;
+
 //flags for axis stall detection
 extern uint8_t tmc2130_sg_thr[4];
+extern uint16_t tmc2130_sg_cnt_thr[4];
 
 extern bool tmc2130_sg_stop_on_crash;
+extern uint8_t tmc2130_sg_filter_mask;
 extern uint8_t tmc2130_sg_crash; //crash mask
 
 extern uint8_t tmc2130_sg_meassure;
@@ -67,10 +71,13 @@ extern void tmc2130_home_enter(uint8_t axes_mask);
 //exit homing (called from homeaxis after homing ends)
 extern void tmc2130_home_exit();
 
+extern uint8_t tmc2130_sample_diag();
+
 //start stallguard meassuring for single axis
 extern void tmc2130_sg_meassure_start(uint8_t axis);
 //stop current stallguard meassuring and report result
 extern uint16_t tmc2130_sg_meassure_stop();
+extern uint16_t tmc2130_sg_meassure_now(uint8_t axis);
 
 extern void tmc2130_setup_chopper(uint8_t axis, uint8_t mres, uint8_t current_h, uint8_t current_r);
 
