@@ -7324,7 +7324,15 @@ void lcd_sdcard_menu()
 static void lcd_belttest_v()
 {
     lcd_belttest();
-    menu_back_if_clicked();
+
+    KEEPALIVE_STATE(PAUSED_FOR_USER);
+    while (!lcd_clicked()){
+        manage_heater();
+	manage_inactivity(true);
+	_delay(100);
+    }
+    KEEPALIVE_STATE(NOT_BUSY);
+    menu_back();
 }
 void lcd_belttest_print(const char* msg, uint16_t X, uint16_t Y)
 {
@@ -7349,6 +7357,7 @@ void lcd_belttest()
     uint16_t   Y = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_Y));
     lcd_belttest_print(_i("Checking X..."), X, Y);
 
+    FORCE_HIGH_POWER_START;
     _delay(2000);
     KEEPALIVE_STATE(IN_HANDLER);
 
@@ -7356,7 +7365,7 @@ void lcd_belttest()
     X = eeprom_read_word((uint16_t*)(EEPROM_BELTSTATUS_X));
     if (!_result){
         lcd_belttest_print(_i("Error"), X, Y);
-        return;
+        goto error;
     }
 
     lcd_belttest_print(_i("Checking Y..."), X, Y);
@@ -7365,15 +7374,16 @@ void lcd_belttest()
 
     if (!_result){
         lcd_belttest_print(_i("Error"), X, Y);
-        lcd_clear();
-        return;
+        goto error;
     }
 
 
     lcd_belttest_print(_i("Done"), X, Y);
 
+ error:
+    enquecommand_P(PSTR("M84"));
+    FORCE_HIGH_POWER_END;
     KEEPALIVE_STATE(NOT_BUSY);
-    _delay(3000);
 }
 #endif //TMC2130
 
@@ -7698,11 +7708,11 @@ static bool lcd_selfcheck_axis_sg(unsigned char axis) {
 
 //end of second measurement, now check for possible errors:
 
+	enable_endstops(false);
+
 	for(uint_least8_t i = 0; i < 2; i++){ //check if measured axis length corresponds to expected length
 		printf_P(_N("Measured axis length:%.3f\n"), measured_axis_length[i]);
 		if (abs(measured_axis_length[i] - axis_length) > max_error_mm) {
-			enable_endstops(false);
-
 			const char *_error_1;
 
 			if (axis == X_AXIS) _error_1 = "X";
