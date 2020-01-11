@@ -195,6 +195,9 @@ int extruder_multiply[EXTRUDERS] = {100
 int bowden_length[4] = {385, 385, 385, 385};
 
 bool is_usb_printing = false;
+#ifdef USB_PRINT_STATISTICS
+bool is_usb_print_statistics = false;
+#endif
 bool homing_flag = false;
 
 bool temp_cal_active = false;
@@ -4676,6 +4679,12 @@ if(eSoundMode!=e_SOUND_MODE_SILENT)
 #endif //MK1BP
 	case_G80:
 	{
+#ifdef USB_PRINT_STATISTICS
+		if (is_usb_printing && !is_usb_print_statistics) {
+			is_usb_print_statistics = true;
+			starttime=_millis();
+		}
+#endif
 		mesh_bed_leveling_flag = true;
 #ifndef LA_NOCOMPAT
         // When printing via USB there's no clear boundary between prints. Abuse MBL to indicate
@@ -6287,6 +6296,15 @@ Sigma_Exit:
           #endif
         }
       }
+#ifdef USB_PRINT_STATISTICS
+      if (is_usb_print_statistics) {
+        is_usb_print_statistics = false;
+        stoptime = _millis();
+        unsigned long t = (stoptime - starttime - pause_time) / 1000;
+        pause_time = 0;
+        save_statistics(total_filament_used, t);
+      }
+#endif
 	  //in the end of print set estimated time to end of print and extruders used during print to default values for next print
 	  print_time_remaining_init();
 	  snmm_filaments_used = 0;
